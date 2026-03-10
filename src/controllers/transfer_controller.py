@@ -1,119 +1,75 @@
-import httpx
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional
-
-from src.config.settings import Settings, get_settings
+from fastapi import APIRouter, HTTPException
 from src.services.transfer_service import TransferService
-from src.models.schemas import (
-    TransferInstanceRequest,
-    TransferSeriesRequest,
-    TransferResult,
-    TransferSeriesResult,
-    ErrorResponse,
-)
+import logging
 
-router = APIRouter()
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/transfer", tags=["Transfer"])
+
+service = TransferService()
 
 
-def get_transfer_service(settings: Settings = Depends(get_settings)) -> TransferService:
-    """Inyección de dependencias para el servicio de transferencia."""
-    return TransferService(settings)
+# ============================================
+# ENDPOINTS DE TRANSFERENCIA ORTHANC → JOEYCARE
+# ============================================
 
-
-# ============================
-# ESTADO DE JOYCARE
-# ============================
-
+# ESTADO DE JOEYCARE
 @router.get(
-    "/joycare/status",
-    summary="Estado de JoyCare",
-    description="Verifica la conexión con el backend de JoyCare.",
-    responses={502: {"model": ErrorResponse}}
+    "/joeycare/status",
+    summary="Estado de JoeyCare",
+    description="Verifica la conexión con JoeyCare Backend."
 )
-async def check_joycare_status(service: TransferService = Depends(get_transfer_service)):
+async def check_joeycare_status():
     try:
-        return await service.check_joycare_connection()
+        return await service.check_joeycare_connection()
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error verificando JoyCare: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get(
-    "/joycare/neonatos",
-    summary="Listar neonatos de JoyCare",
-    description="Obtiene la lista de neonatos desde JoyCare para seleccionar destino.",
-    responses={502: {"model": ErrorResponse}}
+    "/joeycare/neonatos",
+    summary="Listar neonatos de JoeyCare",
+    description="Obtiene la lista de neonatos registrados en JoeyCare."
 )
-async def list_joycare_neonatos(service: TransferService = Depends(get_transfer_service)):
+async def list_joeycare_neonatos():
     try:
-        return await service.get_joycare_neonatos()
+        return await service.get_joeycare_neonatos()
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error obteniendo neonatos: {str(e)}")
-
-
-# ============================
-# TRANSFERENCIA
-# ============================
-
-@router.post(
-    "/transfer/instance",
-    response_model=TransferResult,
-    summary="Transferir una imagen DICOM",
-    description=(
-        "Descarga una instancia DICOM desde Orthanc (PACS) y la sube "
-        "como ecografía a JoyCare, asociándola a un neonato."
-    ),
-    responses={
-        400: {"model": ErrorResponse},
-        502: {"model": ErrorResponse}
-    }
-)
-async def transfer_instance(
-    request: TransferInstanceRequest,
-    service: TransferService = Depends(get_transfer_service)
-):
-    try:
-        result = await service.transfer_instance(
-            instance_id=request.instance_id,
-            neonato_id=request.neonato_id,
-            uploader_medico_id=request.uploader_medico_id,
-            sede_id=request.sede_id
-        )
-        return result
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Instancia o neonato no encontrado: {str(e)}"
-            )
-        raise HTTPException(status_code=502, detail=f"Error en la transferencia: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error en la transferencia: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post(
-    "/transfer/series",
-    response_model=TransferSeriesResult,
-    summary="Transferir una serie completa",
+    "/instance",
+    summary="Transferir instancia DICOM",
     description=(
-        "Descarga TODAS las instancias de una serie desde Orthanc (PACS) "
-        "y las sube a JoyCare como ecografías del neonato seleccionado."
-    ),
-    responses={
-        400: {"model": ErrorResponse},
-        502: {"model": ErrorResponse}
-    }
+        "Descarga una instancia DICOM específica desde Orthanc y la sube "
+        "como ecografía a JoeyCare asociada a un neonato."
+    )
 )
-async def transfer_series(
-    request: TransferSeriesRequest,
-    service: TransferService = Depends(get_transfer_service)
-):
+async def transfer_instance(instance_id: str, neonato_id: int):
     try:
-        result = await service.transfer_series(
-            series_id=request.series_id,
-            neonato_id=request.neonato_id,
-            uploader_medico_id=request.uploader_medico_id,
-            sede_id=request.sede_id
+        return await service.transfer_instance(
+            instance_id=instance_id,
+            neonato_id=neonato_id
         )
-        return result
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error en la transferencia: {str(e)}")
+        logger.error(f"Error en transferencia: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/study",
+    summary="Transferir estudio completo",
+    description=(
+        "Descarga TODAS las instancias de un estudio desde Orthanc "
+        "y las sube a JoeyCare asociadas a un neonato."
+    )
+)
+async def transfer_study(study_id: str, neonato_id: int):
+    try:
+        return await service.transfer_study(
+            study_id=study_id,
+            neonato_id=neonato_id
+        )
+    except Exception as e:
+        logger.error(f"Error en transferencia de estudio: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

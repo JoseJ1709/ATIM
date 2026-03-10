@@ -22,10 +22,10 @@ class Settings(BaseSettings):
     orthanc_password: str = "orthanc"
     orthanc_use_dicomweb: bool = True
 
-    # JoyCare
-    joycare_host: str = "joycare-backend"
-    joycare_port: int = 3000
-    joycare_upload_endpoint: str = "/api/upload"
+    # JoeyCare
+    joeycare_host: str = "joeycare-backend"
+    joeycare_port: int = 4000
+    joeycare_upload_endpoint: str = "/api/upload"
 
     # Security
     secret_key: str = "cambiar-esto-en-produccion-con-algo-seguro"
@@ -44,9 +44,9 @@ class Settings(BaseSettings):
         return f"{self.orthanc_url}/dicom-web"
 
     @property
-    def joycare_url(self) -> str:
-        """URL base de JoyCare."""
-        return f"http://{self.joycare_host}:{self.joycare_port}"
+    def joeycare_url(self) -> str:
+        """URL base de JoeyCare."""
+        return f"http://{self.joeycare_host}:{self.joeycare_port}"
 
     model_config = SettingsConfigDict(
         env_file=".env",
