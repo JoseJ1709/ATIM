@@ -38,8 +38,10 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            f"http://localhost:3000",     # JoyCare frontend
-            f"http://joycare-frontend:3000",
+            "http://localhost:5173",      # JoyCare frontend (Vite)
+            "http://localhost:4000",      # JoyCare backend
+            "http://host.docker.internal:5173",
+            "http://host.docker.internal:4000",
         ],
         allow_credentials=True,
         allow_methods=["*"],
