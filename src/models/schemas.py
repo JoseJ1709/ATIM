@@ -97,7 +97,7 @@ class InstanceSummary(BaseModel):
 # ============================
 
 class TransferInstanceRequest(BaseModel):
-    """Solicitud para transferir una instancia DICOM de Orthanc a JoyCare."""
+    """Solicitud para transferir una instancia DICOM a JoeyCare."""
     instance_id: str
     neonato_id: int
     uploader_medico_id: int
@@ -105,7 +105,7 @@ class TransferInstanceRequest(BaseModel):
 
 
 class TransferSeriesRequest(BaseModel):
-    """Solicitud para transferir una serie completa de Orthanc a JoyCare."""
+    """Solicitud para transferir una serie completa de Orthanc a JoeyCare."""
     series_id: str
     neonato_id: int
     uploader_medico_id: int

@@ -23,9 +23,9 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         description=(
-            "API para la transferencia segura y cifrada de imágenes médicas DICOM. "
-            "Actúa como middleware entre sistemas PACS (Orthanc) y aplicaciones "
-            "de visualización (JoyCare)."
+            "API intermediaria entre Orthanc (PACS) y JoeyCare. "
+            "Permite gestionar imágenes DICOM de ecografías cerebrales "
+            "de visualización y transferencia segura."
         ),
         version=settings.app_version,
         docs_url="/docs",
@@ -34,12 +34,13 @@ def create_app() -> FastAPI:
 
     # === Middlewares ===
 
-    # CORS - Permitir comunicación con JoyCare
+    # CORS - Permitir comunicación con JoeyCare Frontend
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            f"http://localhost:3000",     # JoyCare frontend
-            f"http://joycare-frontend:3000",
+            "http://localhost:5173",    # JoeyCare Frontend (Vite)
+            "http://localhost:4000",     # JoeyCare Backend
+            "http://localhost:8042",     # Orthanc Explorer
         ],
         allow_credentials=True,
         allow_methods=["*"],

@@ -1,0 +1,75 @@
+services:
+  # =============================================
+  # ATIM - API de Transferencia de Imágenes Médicas
+  # =============================================
+  atim:
+    build: .
+    container_name: atim
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      orthanc:
+        condition: service_started
+    networks:
+      - atim-network
+    restart: unless-stopped
+
+  # =============================================
+  # Orthanc - Servidor PACS (DICOM)
+  # =============================================
+  orthanc:
+    image: orthancteam/orthanc:24.3.5
+    container_name: orthanc
+    ports:
+      - "8042:8042"   # API REST / Explorer
+      - "4242:4242"   # Puerto DICOM
+    environment:
+      ORTHANC__NAME: "ATIM-Orthanc"
+      ORTHANC__DICOM_AET: "ATIM"
+      ORTHANC__DICOM_PORT: 4242
+      ORTHANC__REGISTERED_USERS: |
+        {"orthanc": "orthanc"}
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      DICOM_WEB_PLUGIN_ENABLED: "true"
+      ORTHANC__DICOM_WEB__ENABLE: "true"
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet --user orthanc --password orthanc http://localhost:8042/system || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - atim-network
+    restart: unless-stopped
+
+  # =============================================
+  # JoyCare Backend (Node.js)
+  # =============================================
+  # NOTA: Descomenta y ajusta esta sección cuando tengas
+  # el repositorio de JoyCare disponible localmente.
+  #
+  # joycare-backend:
+  #   build: ../JoyCare        # <-- Ajusta la ruta al repo de JoyCare
+  #   container_name: joycare-backend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NODE_ENV=development
+  #     - PORT=3000
+  #   networks:
+  #     - atim-network
+  #   restart: unless-stopped
+
+volumes:
+  orthanc-data:
+    driver: local
+
+networks:
+  atim-network:
+    driver: bridge
