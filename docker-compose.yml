@@ -1,7 +1,9 @@
+version: '3.8'
+
 services:
-  # =============================================
-  # ATIM - API de Transferencia de Imágenes Médicas
-  # =============================================
+  # ========================
+  # ATIM - API Backend
+  # ========================
   atim:
     build: .
     container_name: atim
@@ -9,37 +11,44 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       orthanc:
-        condition: service_started
+        condition: service_healthy
     networks:
       - atim-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
-  # =============================================
-  # Orthanc - Servidor PACS (DICOM)
-  # =============================================
+  # ========================
+  # Orthanc - PACS + DICOMweb
+  # ========================
   orthanc:
     image: orthancteam/orthanc:24.3.5
     container_name: orthanc
     ports:
-      - "8042:8042"   # API REST / Explorer
-      - "4242:4242"   # Puerto DICOM
-    environment:
-      ORTHANC__NAME: "ATIM-Orthanc"
-      ORTHANC__DICOM_AET: "ATIM"
-      ORTHANC__DICOM_PORT: 4242
-      ORTHANC__REGISTERED_USERS: |
-        {"orthanc": "orthanc"}
-      ORTHANC__AUTHENTICATION_ENABLED: "true"
-      DICOM_WEB_PLUGIN_ENABLED: "true"
-      ORTHANC__DICOM_WEB__ENABLE: "true"
+      - "8042:8042"
+      - "4242:4242"
     volumes:
       - orthanc-data:/var/lib/orthanc/db
+    environment:
+      - ORTHANC__NAME=ATIM-Orthanc
+      - ORTHANC__REMOTE_ACCESS_ALLOWED=true
+      - ORTHANC__AUTHENTICATION_ENABLED=true
+      - "ORTHANC__REGISTERED_USERS={\"atim\": \"atim2026secure\"}"
+      - ORTHANC__DICOM_AET=ATIM
+      - ORTHANC__DICOM_PORT=4242
+      - ORTHANC__DICOM_WEB__ENABLE=true
+      - ORTHANC__DICOM_WEB__ROOT=/dicom-web/
+      - ORTHANC__DICOM_WEB__ENABLE_WADO=true
+      - ORTHANC__DICOM_WEB__WADO_ROOT=/wado
+      - ORTHANC__DICOM_WEB__STUDIES_METADATA=Full
+      - ORTHANC__DICOM_WEB__SERIES_METADATA=Full
+      - VERBOSE_ENABLED=true
+      - DICOM_WEB_PLUGIN_ENABLED=true
+      - ORTHANC_EXPLORER_2_ENABLED=true
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider --quiet --user orthanc --password orthanc http://localhost:8042/system || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,base64; req=urllib.request.Request('http://localhost:8042/system'); req.add_header('Authorization','Basic '+base64.b64encode(b'atim:atim2026secure').decode()); urllib.request.urlopen(req)\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -48,23 +57,30 @@ services:
       - atim-network
     restart: unless-stopped
 
-  # =============================================
-  # JoyCare Backend (Node.js)
-  # =============================================
-  # NOTA: Descomenta y ajusta esta sección cuando tengas
-  # el repositorio de JoyCare disponible localmente.
-  #
-  # joycare-backend:
-  #   build: ../JoyCare        # <-- Ajusta la ruta al repo de JoyCare
-  #   container_name: joycare-backend
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - NODE_ENV=development
-  #     - PORT=3000
-  #   networks:
-  #     - atim-network
-  #   restart: unless-stopped
+  # ========================
+  # Nginx Proxy para OHIF (CORS)
+  # ========================
+  ohif-nginx:
+    image: nginx:alpine
+    container_name: ohif-nginx
+    ports:
+      - "3000:80"
+    volumes:
+      - ./ohif-config/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ohif-config/default.js:/usr/share/nginx/html/app-config.js:ro
+    depends_on:
+      orthanc:
+        condition: service_healthy
+    networks:
+      - atim-network
+    restart: unless-stopped
+
+  ohif-viewer:
+    image: ohif/app:latest
+    container_name: ohif-viewer
+    networks:
+      - atim-network
+    restart: unless-stopped
 
 volumes:
   orthanc-data:

@@ -3,31 +3,17 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-env/
-venv/
-.venv/
-
-# Environment
-.env
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Distribution
+*.egg-info/
 dist/
 build/
-*.egg-info/
-
-# Certificates (se generarán en fase de seguridad)
-certs/
-*.pem
-*.key
-*.crt
+venv/
+.venv/
+.vscode/
+.idea/
+.env
+orthanc-data/
+.DS_Store
+Thumbs.db
+*.log
+htmlcov/
+.coverage

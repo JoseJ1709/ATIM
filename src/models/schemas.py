@@ -93,7 +93,32 @@ class InstanceSummary(BaseModel):
 
 
 # ============================
-# TRANSFERENCIA
+# UPLOAD (JoeyCare -> ATIM -> Orthanc)
+# ============================
+
+class UploadDicomResponse(BaseModel):
+    """Respuesta a la carga de un DICOM."""
+    status: str
+    message: str
+    orthanc_id: str
+    parent_patient: Optional[str] = None
+    parent_study: Optional[str] = None
+    parent_series: Optional[str] = None
+    file_size_bytes: int
+
+
+class UploadMultipleDicomResponse(BaseModel):
+    """Respuesta a la carga de múltiples DICOMs."""
+    status: str
+    total_files: int
+    uploaded: int
+    failed: int
+    results: List[dict] = []
+    errors: List[dict] = []
+
+
+# ============================
+# TRANSFERENCIA (Orthanc -> JoeyCare)
 # ============================
 
 class TransferInstanceRequest(BaseModel):
