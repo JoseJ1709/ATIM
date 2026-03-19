@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Body
 from typing import List, Optional
 import logging
+import base64
+import binascii
 
 from src.config.settings import Settings, get_settings
 from src.services.upload_service import UploadService
@@ -129,22 +131,56 @@ async def upload_encrypted_dicom(
         if len(encrypted_content) == 0:
             raise HTTPException(status_code=400, detail="El archivo esta vacio")
 
-        if len(encrypted_content) < 32:
+        # Compatibilidad: algunos clientes envian el contenido cifrado en base64.
+        decoded_from_base64 = False
+        normalized_content = encrypted_content
+        try:
+            as_text = encrypted_content.decode("utf-8").strip()
+            if as_text:
+                decoded_candidate = base64.b64decode(as_text, validate=True)
+                if len(decoded_candidate) > 0:
+                    normalized_content = decoded_candidate
+                    decoded_from_base64 = True
+        except (UnicodeDecodeError, binascii.Error, ValueError):
+            normalized_content = encrypted_content
+
+        if len(normalized_content) < 32:
+            # Detectar DICOM sin cifrar (prefijo DICM en byte 128)
+            if len(normalized_content) >= 132 and normalized_content[128:132] == b"DICM":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "El archivo parece un DICOM sin cifrar. "
+                        "Use /api/v1/upload/dicom o cifrelo primero con AES-256-CBC."
+                    )
+                )
+
             raise HTTPException(status_code=400, detail="Archivo cifrado demasiado corto")
 
         # Descifrar
         encryption_service = EncryptionService()
         try:
-            decrypted_content = encryption_service.decrypt(encrypted_content)
+            decrypted_content = encryption_service.decrypt(normalized_content)
         except Exception as e:
             logger.error(f"Error descifrando archivo: {e}")
+
+            if len(normalized_content) >= 132 and normalized_content[128:132] == b"DICM":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "El archivo parece un DICOM sin cifrar. "
+                        "Use /api/v1/upload/dicom o cifrelo primero con AES-256-CBC."
+                    )
+                )
+
             raise HTTPException(
                 status_code=400,
                 detail="No se pudo descifrar el archivo. Verifique la clave de cifrado."
             )
 
         logger.info(
-            f"Archivo descifrado: {len(encrypted_content)} bytes -> {len(decrypted_content)} bytes"
+            f"Archivo descifrado: {len(normalized_content)} bytes -> {len(decrypted_content)} bytes"
+            f" (base64={decoded_from_base64})"
         )
 
         # Subir a Orthanc

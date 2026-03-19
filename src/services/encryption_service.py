@@ -88,6 +88,11 @@ class EncryptionService:
         iv = encrypted_data[:16]
         ciphertext = encrypted_data[16:]
 
+        if len(ciphertext) == 0 or len(ciphertext) % 16 != 0:
+            raise ValueError(
+                "Ciphertext inválido para AES-CBC: tamaño no múltiplo de 16 bytes"
+            )
+
         # Descifrar con AES-256-CBC
         cipher = Cipher(
             algorithms.AES(self.key),
