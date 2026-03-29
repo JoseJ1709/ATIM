@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
+    ssl_keyfile: str | None = None
+    ssl_certfile: str | None = None
 
     # Orthanc (PACS)
     orthanc_host: str = "localhost"

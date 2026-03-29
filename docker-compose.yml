@@ -9,6 +9,7 @@ services:
     container_name: atim
     ports:
       - "8000:8000"
+    command: sh -c "python scripts/https/generate_certs.py && uvicorn src.main:app --host 0.0.0.0 --port 8000 --ssl-keyfile certs/key.pem --ssl-certfile certs/cert.pem --reload"
     env_file:
       - .env
     depends_on:

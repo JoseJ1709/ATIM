@@ -45,10 +45,14 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            "http://localhost:5173",    # JoeyCare Frontend (Vite)
+            "http://localhost:5173",     # JoeyCare Frontend (Vite)
+            "https://localhost:5173",    # JoeyCare Frontend HTTPS
             "http://localhost:4000",     # JoeyCare Backend
+            "https://localhost:4000",    # JoeyCare Backend HTTPS
             "http://localhost:8042",     # Orthanc Explorer
+            "https://localhost:8042",    # Orthanc Explorer HTTPS
             "http://localhost:3000",     # Orthanc DICOMweb
+            "https://localhost:3000",    # Orthanc DICOMweb HTTPS
         ],
         allow_credentials=True,
         allow_methods=["*"],
