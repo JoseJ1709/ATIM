@@ -1,95 +1,59 @@
 # ATIM
 Api para la transferencia de imagenes medicas
 
-## Ejecucion desde cero en localhost con HTTPS (Windows)
+## Guia de ejecución:
 
-Requisitos:
-- Docker Desktop abierto
-- PowerShell en la carpeta del proyecto
+### 1) Abrir PowerShell en la carpeta del proyecto
 
-Comandos (ejecutar en este orden):
+### 2) Instalar mkcert una sola vez
 
-Linea 1:
 ```powershell
-Copy-Item .env.example .env -ErrorAction SilentlyContinue
+winget install FiloSottile.mkcert
 ```
 
-Linea 2:
+### 3) Cerrar esa terminal y abrir una nueva
+
+Esto refresca el PATH para que Windows reconozca `mkcert`.
+
+### 4) Ejecutar el setup HTTPS
+
 ```powershell
-docker compose up -d --build --force-recreate
+.\scripts\https\setup_https.ps1
 ```
 
-Linea 3:
-```powershell
-docker compose ps
+Que hace el script automaticamente:
+- Crea `.env` desde `.env.example` si no existe
+- Detecta `mkcert` aunque el PATH no se haya refrescado
+- Instala la CA local de `mkcert` en Windows
+- Genera `certs\cert.pem` y `certs\key.pem`
+- Levanta Docker con HTTPS
+- Verifica `https://localhost:8000/api/v1/health`
+
+### 5) Abrir Swagger
+
+```text
+https://localhost:8000/docs
 ```
 
-Linea 4:
-```powershell
-docker compose logs --tail 40 atim
-```
-
-Linea 5:
-```powershell
-Start-Sleep -Seconds 5
-```
-
-Linea 6:
-```powershell
-curl.exe -k https://localhost:8000/api/v1/health
-```
-
-Linea 7:
-```powershell
-Start-Process https://localhost:8000/docs
-```
-
-Resultado esperado:
-- En logs de atim debe aparecer: Uvicorn running on https://0.0.0.0:8000
-- El health endpoint debe devolver un JSON con status healthy
-
-## Confiar certificado en Windows (opcional, recomendado)
-
-Si el navegador muestra "No es seguro", ejecuta estas lineas:
-
-Linea 1:
-```powershell
-New-Item -ItemType Directory -Path .\certs -Force | Out-Null
-```
-
-Linea 2:
-```powershell
-docker compose cp atim:/app/certs/cert.pem .\certs\cert.pem
-```
-
-Linea 3:
-```powershell
-Import-Certificate -FilePath .\certs\cert.pem -CertStoreLocation Cert:\CurrentUser\Root
-```
-
-Linea 4:
-```powershell
-Stop-Process -Name msedge -Force -ErrorAction SilentlyContinue
-```
-
-Linea 5:
-```powershell
-Start-Process https://localhost:8000/docs
-```
-
-Verificacion HTTPS sin omitir validacion TLS:
+### 6) Verificacion manual opcional
 
 ```powershell
 curl.exe https://localhost:8000/api/v1/health
 ```
 
-Si ese comando responde JSON, la confianza del certificado quedo correcta.
+## Troubleshooting rapido
 
-## Estructura HTTPS
+Si `mkcert` no se reconoce:
+- Cierra y abre una nueva terminal.
+- Ejecuta `where mkcert`.
 
-- Scripts: scripts/https
+Si Windows muestra la advertencia para instalar la CA de `mkcert`:
+- Pulsa `Sí`.
 
-Apagar servicios:
+Si Docker falla por daemon:
+- Abre Docker Desktop y espera que diga `Engine running`.
+
+## Apagar servicios
 
 ```powershell
 docker compose down
