@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
@@ -86,16 +86,12 @@ class SeriesSummary(BaseModel):
 # ============================
 
 class InstanceSummary(BaseModel):
+    """Resumen de una instancia (imagen DICOM individual)."""
     orthanc_id: str
-    sop_instance_uid: str
+    sop_instance_uid: Optional[str] = None
     instance_number: Optional[str] = None
 
-    @field_validator("instance_number", mode="before")
-    @classmethod
-    def _coerce_instance_number(cls, v):
-        if v is None:
-            return None
-        return str(v)
+
 # ============================
 # UPLOAD (JoeyCare -> ATIM -> Orthanc)
 # ============================
