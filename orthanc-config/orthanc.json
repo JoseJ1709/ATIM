@@ -1,0 +1,25 @@
+{
+    "Name": "ATIM-Orthanc",
+    "RemoteAccessAllowed": true,
+    "AuthenticationEnabled": true,
+    "RegisteredUsers": {
+        "orthanc": "orthanc"
+    },
+    "DicomAet": "ATIM",
+    "DicomPort": 4242,
+    "HttpPort": 8042,
+    "DicomWeb": {
+        "Enable": true,
+        "Root": "/dicom-web/",
+        "EnableWado": true,
+        "WadoRoot": "/wado",
+        "Host": "0.0.0.0",
+        "Ssl": false,
+        "StudiesMetadata": "Full",
+        "SeriesMetadata": "Full"
+    },
+    "OrthancExplorer2": {
+        "Enable": true,
+        "IsDefaultUI": true
+    }
+}

@@ -1,132 +1,111 @@
 import logging
-from typing import List, Optional
-
-from src.config.settings import Settings
 from src.repositories.orthanc_repository import OrthancRepository
-from src.repositories.joycare_repository import JoyCareRepository
+from src.repositories.joeycare_repository import JoeyCareRepository
+from src.config.settings import get_settings
 
-logger = logging.getLogger("atim")
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 class TransferService:
     """
-    Servicio de transferencia: descarga imágenes desde Orthanc (PACS)
-    y las sube a JoyCare.
+    Servicio que orquesta la descarga de imágenes desde Orthanc (PACS)
+    y las sube a JoeyCare.
     """
 
-    def __init__(self, settings: Settings):
-        self.settings = settings
+    def __init__(self):
         self.orthanc_repo = OrthancRepository(settings)
-        self.joycare_repo = JoyCareRepository(settings)
+        self.joeycare_repo = JoeyCareRepository()
 
     async def transfer_instance(
-        self,
-        instance_id: str,
-        neonato_id: int,
-        uploader_medico_id: int,
-        sede_id: Optional[int] = None
+        self, instance_id: str, neonato_id: int, metadata: dict = None
     ) -> dict:
         """
-        Transferir una instancia DICOM desde Orthanc a JoyCare.
-        
+        Transferir una instancia DICOM de Orthanc a JoeyCare.
+
+        Flujo:
         1. Descarga el archivo DICOM desde Orthanc
-        2. Obtiene los tags para el nombre del archivo
-        3. Sube el archivo a JoyCare
+        2. Extrae metadata relevante
+        3. Sube el archivo a JoeyCare
         """
         logger.info(
-            f"Iniciando transferencia: instancia={instance_id} → "
-            f"neonato={neonato_id}, médico={uploader_medico_id}"
+            f"Iniciando transferencia: instance={instance_id}, neonato={neonato_id}"
         )
 
-        # 1. Descargar archivo DICOM desde Orthanc
-        file_bytes = await self.orthanc_repo.get_instance_file(instance_id)
-        logger.info(f"Descargado de Orthanc: {len(file_bytes)} bytes")
+        # 1. Descargar desde Orthanc
+        dicom_data = await self.orthanc_repo.get_instance_file(instance_id)
+        logger.info(f"Descargado desde Orthanc: {len(dicom_data)} bytes")
 
-        # 2. Obtener tags para construir un nombre de archivo descriptivo
-        try:
-            tags = await self.orthanc_repo.get_instance_tags(instance_id)
-            patient_name = tags.get("PatientName", "unknown")
-            modality = tags.get("Modality", "US")
-            instance_number = tags.get("InstanceNumber", "0")
-            filename = f"{patient_name}_{modality}_{instance_number}.dcm"
-            # Limpiar caracteres no válidos
-            filename = "".join(c if c.isalnum() or c in "._-" else "_" for c in filename)
-        except Exception:
-            filename = f"{instance_id}.dcm"
+        # 2. Obtener metadata
+        instance_info = await self.orthanc_repo.get_instance_tags(instance_id)
+        filename = f"eco_{neonato_id}_{instance_id}.dcm"
 
-        # 3. Subir a JoyCare
-        result = await self.joycare_repo.upload_ecografia(
+        transfer_metadata = {
+            "orthanc_instance_id": instance_id,
+            "patient_name": instance_info.get("PatientName", ""),
+            "study_description": instance_info.get("StudyDescription", ""),
+            **(metadata or {})
+        }
+
+        # 3. Subir a JoeyCare
+        result = await self.joeycare_repo.upload_ecografia(
             neonato_id=neonato_id,
-            file_bytes=file_bytes,
+            file_content=dicom_data,
             filename=filename,
-            uploader_medico_id=uploader_medico_id,
-            sede_id=sede_id,
-            mime_type="application/dicom"
+            metadata=transfer_metadata
         )
 
-        logger.info(f"Transferencia completada: {filename} → JoyCare id={result.get('id')}")
+        logger.info(f"Transferencia completada: instance={instance_id}")
 
         return {
             "status": "success",
-            "message": "Imagen transferida exitosamente de PACS a JoyCare",
-            "orthanc_instance_id": instance_id,
-            "filename": filename,
-            "file_size_bytes": len(file_bytes),
-            "joycare_response": result
+            "message": "Imagen transferida exitosamente",
+            "instance_id": instance_id,
+            "neonato_id": neonato_id,
+            "file_size": len(dicom_data),
+            "joeycare_response": result
         }
 
-    async def transfer_series(
-        self,
-        series_id: str,
-        neonato_id: int,
-        uploader_medico_id: int,
-        sede_id: Optional[int] = None
-    ) -> dict:
+    async def transfer_study(self, study_id: str, neonato_id: int) -> dict:
         """
-        Transferir TODAS las instancias de una serie desde Orthanc a JoyCare.
-        
-        Útil cuando una serie tiene múltiples imágenes (ej: ecografía con varios frames).
+        Transferir TODAS las instancias de un estudio de Orthanc a JoeyCare.
         """
-        logger.info(f"Iniciando transferencia de serie completa: {series_id}")
+        logger.info(
+            f"Transferencia de estudio: study={study_id}, neonato={neonato_id}"
+        )
 
-        # Obtener todas las instancias de la serie
-        instances = await self.orthanc_repo.get_series_instances(series_id)
-        logger.info(f"Serie {series_id}: {len(instances)} instancias encontradas")
-
+        instances = await self.orthanc_repo.get_study_instances(study_id)
         results = []
         errors = []
 
-        for inst in instances:
-            instance_id = inst.get("ID")
+        for instance in instances:
             try:
                 result = await self.transfer_instance(
-                    instance_id=instance_id,
-                    neonato_id=neonato_id,
-                    uploader_medico_id=uploader_medico_id,
-                    sede_id=sede_id
+                    instance_id=instance["ID"],
+                    neonato_id=neonato_id
                 )
                 results.append(result)
             except Exception as e:
-                logger.error(f"Error transfiriendo instancia {instance_id}: {str(e)}")
+                logger.error(f"Error transfiriendo instancia {instance['ID']}: {e}")
                 errors.append({
-                    "instance_id": instance_id,
+                    "instance_id": instance["ID"],
                     "error": str(e)
                 })
 
         return {
             "status": "completed",
-            "series_id": series_id,
+            "study_id": study_id,
+            "neonato_id": neonato_id,
             "total_instances": len(instances),
             "transferred": len(results),
             "failed": len(errors),
-            "results": results,
             "errors": errors
         }
 
-    async def get_joycare_neonatos(self) -> list:
-        """Obtener la lista de neonatos desde JoyCare (para el frontend)."""
-        return await self.joycare_repo.get_neonatos()
+    async def get_joeycare_neonatos(self) -> list:
+        """Obtener la lista de neonatos desde JoeyCare."""
+        return await self.joeycare_repo.get_neonatos()
 
-    async def check_joycare_connection(self) -> dict:
-        """Verificar conexión con JoyCare."""
-        return await self.joycare_repo.check_connection()
+    async def check_joeycare_connection(self) -> dict:
+        """Verificar conexión con JoeyCare."""
+        return await self.joeycare_repo.check_status()

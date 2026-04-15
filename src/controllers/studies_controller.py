@@ -4,6 +4,7 @@ from typing import List
 
 from src.config.settings import Settings, get_settings
 from src.services.studies_service import StudiesService
+from src.services.auth_service import require_jwt
 from src.models.schemas import (
     PatientSummary,
     StudySummary,
@@ -16,7 +17,6 @@ router = APIRouter()
 
 
 def get_studies_service(settings: Settings = Depends(get_settings)) -> StudiesService:
-    """Inyección de dependencias para el servicio de estudios."""
     return StudiesService(settings)
 
 
@@ -28,10 +28,13 @@ def get_studies_service(settings: Settings = Depends(get_settings)) -> StudiesSe
     "/patients",
     response_model=List[PatientSummary],
     summary="Listar pacientes",
-    description="Obtiene todos los pacientes almacenados en Orthanc.",
+    description="Obtiene todos los pacientes almacenados en Orthanc. Requiere JWT.",
     responses={502: {"model": ErrorResponse}}
 )
-async def list_patients(service: StudiesService = Depends(get_studies_service)):
+async def list_patients(
+    payload: dict = Depends(require_jwt),
+    service: StudiesService = Depends(get_studies_service)
+):
     try:
         return await service.get_all_patients()
     except Exception as e:
@@ -46,10 +49,13 @@ async def list_patients(service: StudiesService = Depends(get_studies_service)):
     "/studies",
     response_model=List[StudySummary],
     summary="Listar estudios",
-    description="Obtiene todos los estudios DICOM almacenados en Orthanc.",
+    description="Obtiene todos los estudios DICOM almacenados en Orthanc. Requiere JWT.",
     responses={502: {"model": ErrorResponse}}
 )
-async def list_studies(service: StudiesService = Depends(get_studies_service)):
+async def list_studies(
+    payload: dict = Depends(require_jwt),
+    service: StudiesService = Depends(get_studies_service)
+):
     try:
         return await service.get_all_studies()
     except Exception as e:
@@ -60,10 +66,14 @@ async def list_studies(service: StudiesService = Depends(get_studies_service)):
     "/studies/{study_id}",
     response_model=StudyDetail,
     summary="Detalle de un estudio",
-    description="Obtiene el detalle completo de un estudio con todas sus series.",
+    description="Obtiene el detalle completo de un estudio. Requiere JWT.",
     responses={404: {"model": ErrorResponse}, 502: {"model": ErrorResponse}}
 )
-async def get_study(study_id: str, service: StudiesService = Depends(get_studies_service)):
+async def get_study(
+    study_id: str,
+    payload: dict = Depends(require_jwt),
+    service: StudiesService = Depends(get_studies_service)
+):
     try:
         return await service.get_study_detail(study_id)
     except Exception as e:
@@ -73,18 +83,19 @@ async def get_study(study_id: str, service: StudiesService = Depends(get_studies
 
 
 # ============================
-# SERIES → INSTANCIAS
+# SERIES -> INSTANCIAS
 # ============================
 
 @router.get(
     "/series/{series_id}/instances",
     response_model=List[InstanceSummary],
     summary="Listar instancias de una serie",
-    description="Obtiene todas las instancias (imágenes DICOM) de una serie.",
+    description="Obtiene todas las instancias de una serie. Requiere JWT.",
     responses={502: {"model": ErrorResponse}}
 )
 async def list_series_instances(
     series_id: str,
+    payload: dict = Depends(require_jwt),
     service: StudiesService = Depends(get_studies_service)
 ):
     try:
@@ -100,11 +111,12 @@ async def list_series_instances(
 @router.get(
     "/instances/{instance_id}/file",
     summary="Descargar archivo DICOM",
-    description="Descarga el archivo DICOM original de una instancia.",
+    description="Descarga el archivo DICOM original de una instancia. Requiere JWT.",
     responses={502: {"model": ErrorResponse}}
 )
 async def download_instance_file(
     instance_id: str,
+    payload: dict = Depends(require_jwt),
     service: StudiesService = Depends(get_studies_service)
 ):
     try:
@@ -112,30 +124,62 @@ async def download_instance_file(
         return Response(
             content=file_bytes,
             media_type="application/dicom",
-            headers={
-                "Content-Disposition": f"attachment; filename={instance_id}.dcm"
-            }
+            headers={"Content-Disposition": f"attachment; filename={instance_id}.dcm"}
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error al descargar: {str(e)}")
 
 
 @router.get(
+    "/instances/{instance_id}/file/encrypted",
+    summary="Descargar archivo DICOM cifrado con AES-256",
+    description=(
+        "Descarga el archivo DICOM cifrado con AES-256-CBC. "
+        "Formato: IV (16 bytes) + ciphertext. Requiere JWT."
+    ),
+    responses={502: {"model": ErrorResponse}}
+)
+async def download_instance_file_encrypted(
+    instance_id: str,
+    payload: dict = Depends(require_jwt),
+    service: StudiesService = Depends(get_studies_service)
+):
+    try:
+        from src.services.encryption_service import EncryptionService
+
+        file_bytes = await service.get_instance_file(instance_id)
+
+        # Cifrar con AES-256
+        encryption_service = EncryptionService()
+        encrypted_bytes = encryption_service.encrypt(file_bytes)
+
+        return Response(
+            content=encrypted_bytes,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f"attachment; filename={instance_id}.dcm.enc",
+                "X-Encryption": "AES-256-CBC",
+                "X-Original-Size": str(len(file_bytes))
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error al descargar/cifrar: {str(e)}")
+
+
+@router.get(
     "/instances/{instance_id}/preview",
     summary="Vista previa de imagen",
-    description="Obtiene una vista previa PNG de la instancia DICOM.",
+    description="Obtiene una vista previa PNG de la instancia DICOM. Requiere JWT.",
     responses={502: {"model": ErrorResponse}}
 )
 async def get_instance_preview(
     instance_id: str,
+    payload: dict = Depends(require_jwt),
     service: StudiesService = Depends(get_studies_service)
 ):
     try:
         preview_bytes = await service.get_instance_preview(instance_id)
-        return Response(
-            content=preview_bytes,
-            media_type="image/png"
-        )
+        return Response(content=preview_bytes, media_type="image/png")
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error al obtener preview: {str(e)}")
 
@@ -143,11 +187,12 @@ async def get_instance_preview(
 @router.get(
     "/instances/{instance_id}/tags",
     summary="Tags DICOM de una instancia",
-    description="Obtiene todos los tags DICOM simplificados de una instancia.",
+    description="Obtiene todos los tags DICOM de una instancia. Requiere JWT.",
     responses={502: {"model": ErrorResponse}}
 )
 async def get_instance_tags(
     instance_id: str,
+    payload: dict = Depends(require_jwt),
     service: StudiesService = Depends(get_studies_service)
 ):
     try:
