@@ -127,7 +127,7 @@ async def check_joycare_status(
     """
     try:
         logger.info("🔍 Verificando estado de JoyCare...")
-        result = await service.check_joycare_connection()
+        result = await service.check_joeycare_connection()
         logger.info("✅ JoyCare disponible")
         return result
     except Exception as e:
@@ -166,7 +166,7 @@ async def list_joycare_neonatos(
     """
     try:
         logger.info("📋 Obteniendo lista de neonatos...")
-        neonatos = await service.get_joycare_neonatos()
+        neonatos = await service.get_joeycare_neonatos()
         logger.info(f"✅ {len(neonatos)} neonatos disponibles")
         return neonatos
     except Exception as e:

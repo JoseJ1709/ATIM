@@ -18,25 +18,30 @@ class TransferService:
         self.joeycare_repo = JoeyCareRepository()
 
     async def transfer_instance(
-        self, instance_id: str, neonato_id: int, metadata: dict = None
+        self,
+        instance_id: str,
+        neonato_id: int,
+        uploader_medico_id: int,
+        sede_id: int = None
     ) -> dict:
         """
         Transferir una instancia DICOM de Orthanc a JoeyCare.
 
         Flujo:
         1. Descarga el archivo DICOM desde Orthanc
-        2. Extrae metadata relevante
-        3. Sube el archivo a JoeyCare
+        2. Extrae metadata y UIDs relevantes
+        3. Sube el archivo a JoeyCare con uploader_medico_id y sede_id
         """
         logger.info(
-            f"Iniciando transferencia: instance={instance_id}, neonato={neonato_id}"
+            f"Iniciando transferencia: instance={instance_id}, neonato={neonato_id}, "
+            f"uploader_medico={uploader_medico_id}, sede={sede_id}"
         )
 
         # 1. Descargar desde Orthanc
         dicom_data = await self.orthanc_repo.get_instance_file(instance_id)
         logger.info(f"Descargado desde Orthanc: {len(dicom_data)} bytes")
 
-        # 2. Obtener metadata
+        # 2. Obtener metadata y tags
         instance_info = await self.orthanc_repo.get_instance_tags(instance_id)
         filename = f"eco_{neonato_id}_{instance_id}.dcm"
 
@@ -44,14 +49,15 @@ class TransferService:
             "orthanc_instance_id": instance_id,
             "patient_name": instance_info.get("PatientName", ""),
             "study_description": instance_info.get("StudyDescription", ""),
-            **(metadata or {})
         }
 
-        # 3. Subir a JoeyCare
+        # 3. Subir a JoeyCare con TODOS los parámetros requeridos
         result = await self.joeycare_repo.upload_ecografia(
             neonato_id=neonato_id,
             file_content=dicom_data,
             filename=filename,
+            uploader_medico_id=uploader_medico_id,
+            sede_id=sede_id,
             metadata=transfer_metadata
         )
 
@@ -60,18 +66,26 @@ class TransferService:
         return {
             "status": "success",
             "message": "Imagen transferida exitosamente",
-            "instance_id": instance_id,
+            "orthanc_instance_id": instance_id,
             "neonato_id": neonato_id,
-            "file_size": len(dicom_data),
-            "joeycare_response": result
+            "file_size_bytes": len(dicom_data),
+            "filename": filename,
+            "joycare_response": result
         }
 
-    async def transfer_study(self, study_id: str, neonato_id: int) -> dict:
+    async def transfer_study(
+        self,
+        study_id: str,
+        neonato_id: int,
+        uploader_medico_id: int,
+        sede_id: int = None
+    ) -> dict:
         """
         Transferir TODAS las instancias de un estudio de Orthanc a JoeyCare.
         """
         logger.info(
-            f"Transferencia de estudio: study={study_id}, neonato={neonato_id}"
+            f"Transferencia de estudio: study={study_id}, neonato={neonato_id}, "
+            f"uploader_medico={uploader_medico_id}, sede={sede_id}"
         )
 
         instances = await self.orthanc_repo.get_study_instances(study_id)
@@ -82,7 +96,9 @@ class TransferService:
             try:
                 result = await self.transfer_instance(
                     instance_id=instance["ID"],
-                    neonato_id=neonato_id
+                    neonato_id=neonato_id,
+                    uploader_medico_id=uploader_medico_id,
+                    sede_id=sede_id
                 )
                 results.append(result)
             except Exception as e:
@@ -99,6 +115,7 @@ class TransferService:
             "total_instances": len(instances),
             "transferred": len(results),
             "failed": len(errors),
+            "results": results,
             "errors": errors
         }
 

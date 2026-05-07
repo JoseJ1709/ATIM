@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # JoeyCare
     joeycare_host: str = "joeycare-backend"
     joeycare_port: int = 4000
-    joeycare_upload_endpoint: str = "/api/upload"
+    joeycare_upload_endpoint: str = "/api/ecografias"
 
     # Security - JWT
     secret_key: str = "cambiar-esto-en-produccion-con-algo-seguro"

@@ -355,38 +355,29 @@ class DICOMwebService:
         study_date_to: Optional[str] = None
     ) -> List[StudySummary]:
         """
-        Buscar estudios de ecografía (modalidad US) con filtros.
+        Buscar estudios con filtros via DICOMweb.
         
-        Esta es una búsqueda especializada para ecografías obstétricas.
-        Filtra automáticamente por modalidad "US" (Ultrasound).
+        Busca estudios por cualquier combinación de parámetros.
+        La modalidad está a nivel de serie, no de estudio.
         
         Args:
-            patient_id: ID del paciente (ej: "12345678")
-            patient_name: Nombre del paciente con wildcards (ej: "Maria*" o "*García")
-            study_date_from: Fecha desde (formato YYYYMMDD, ej: "20220101")
-            study_date_to: Fecha hasta (formato YYYYMMDD, ej: "20221231")
+            patient_id: ID del paciente (ej: "556342B")
+            patient_name: Nombre del paciente (ej: "Rubo*")
+            study_date_from: Fecha desde (YYYYMMDD)
+            study_date_to: Fecha hasta (YYYYMMDD)
         
         Returns:
-            Lista de StudySummary que coinciden con los filtros
-        
-        Ejemplo:
-            # Buscar ecografías de María entre enero y marzo de 2022
-            studies = await service.search_ecograph_studies(
-                patient_name="Maria*",
-                study_date_from="20220101",
-                study_date_to="20220331"
-            )
+            Lista de StudySummary que coinciden
         """
-        logger.info(f"🔍 Buscando ecografías con filtros: paciente={patient_name}, rango={study_date_from}-{study_date_to}")
+        logger.info(f"🔍 Buscando estudios: patient_id={patient_id}, patient_name={patient_name}, fecha={study_date_from}-{study_date_to}")
         
         try:
-            # Buscar estudios con modalidad "US" (Ultrasound)
             studies_data = await self.dicomweb_repo.search_studies(
                 patient_id=patient_id,
                 patient_name=patient_name,
                 study_date_from=study_date_from,
                 study_date_to=study_date_to,
-                modality="US"
+                modality=None
             )
             
             studies = []
@@ -402,11 +393,11 @@ class DICOMwebService:
                 )
                 studies.append(study)
             
-            logger.info(f"✅ Se encontraron {len(studies)} ecografías")
+            logger.info(f"✅ Se encontraron {len(studies)} estudios")
             return studies
             
         except Exception as e:
-            logger.error(f"❌ Error buscando ecografías: {str(e)}")
+            logger.error(f"❌ Error buscando estudios: {str(e)}")
             raise
 
     # ============================

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from src.services.transfer_service import TransferService
 from src.services.auth_service import require_jwt
+from src.models.schemas import TransferInstanceRequest, TransferSeriesRequest, TransferResult
 import logging
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/transfer", tags=["Transfer"])
+router = APIRouter(prefix="/transfer")
 
 service = TransferService()
 
@@ -35,29 +36,31 @@ async def list_joeycare_neonatos(payload: dict = Depends(require_jwt)):
 
 @router.post(
     "/instance",
+    response_model=TransferResult,
     summary="Transferir instancia DICOM",
     description=(
         "Descarga una instancia DICOM desde Orthanc y la sube a JoeyCare. Requiere JWT."
     )
 )
 async def transfer_instance(
-    instance_id: str,
-    neonato_id: int,
+    request: TransferInstanceRequest,
     payload: dict = Depends(require_jwt)
 ):
     try:
         logger.info(f"Transferencia solicitada por: {payload.get('sub', 'unknown')}")
         return await service.transfer_instance(
-            instance_id=instance_id,
-            neonato_id=neonato_id
+            instance_id=request.instance_id,
+            neonato_id=request.neonato_id,
+            uploader_medico_id=request.uploader_medico_id,
+            sede_id=request.sede_id
         )
     except Exception as e:
         logger.error(f"Error en transferencia: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @router.post(
     "/study",
+    response_model=dict,
     summary="Transferir estudio completo",
     description=(
         "Descarga TODAS las instancias de un estudio desde Orthanc "
@@ -65,15 +68,16 @@ async def transfer_instance(
     )
 )
 async def transfer_study(
-    study_id: str,
-    neonato_id: int,
+    request: TransferSeriesRequest,
     payload: dict = Depends(require_jwt)
 ):
     try:
         logger.info(f"Transferencia estudio por: {payload.get('sub', 'unknown')}")
         return await service.transfer_study(
-            study_id=study_id,
-            neonato_id=neonato_id
+            study_id=request.series_id,
+            neonato_id=request.neonato_id,
+            uploader_medico_id=request.uploader_medico_id,
+            sede_id=request.sede_id
         )
     except Exception as e:
         logger.error(f"Error en transferencia de estudio: {e}")

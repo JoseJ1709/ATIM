@@ -13,7 +13,7 @@ from typing import List, Optional
 
 from src.config.settings import Settings
 from src.services.dicomweb_service import DICOMwebService
-from src.repositories.joycare_repository import JoyCareRepository
+from src.repositories.joeycare_repository import JoeyCareRepository
 from src.utils.pydicom_handler import PyDICOMHandler
 
 logger = logging.getLogger("atim")
@@ -43,27 +43,27 @@ class DICOMwebTransferService:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.dicomweb_service = DICOMwebService(settings)
-        self.joycare_repo = JoyCareRepository(settings)
+        self.joeycare_repo = JoeyCareRepository()
 
     # ============================
     # ESTADO DE JOYCARE
     # ============================
 
-    async def check_joycare_connection(self) -> dict:
+    async def check_joeycare_connection(self) -> dict:
         """
         Verificar conexión con JoyCare.
         """
         logger.info("🔗 Verificando conexión con JoyCare...")
         
         try:
-            result = await self.joycare_repo.check_connection()
+            result = await self.joeycare_repo.check_connection()
             logger.info("✅ JoyCare conectado")
             return result
         except Exception as e:
             logger.error(f"❌ Error conectando con JoyCare: {str(e)}")
             raise
 
-    async def get_joycare_neonatos(self) -> list:
+    async def get_joeycare_neonatos(self) -> list:
         """
         Obtener la lista de neonatos desde JoyCare.
         
@@ -77,7 +77,7 @@ class DICOMwebTransferService:
         logger.info("📋 Obteniendo lista de neonatos de JoyCare...")
         
         try:
-            neonatos = await self.joycare_repo.get_neonatos()
+            neonatos = await self.joeycare_repo.get_neonatos()
             logger.info(f"✅ {len(neonatos)} neonatos obtenidos")
             return neonatos
         except Exception as e:
@@ -229,9 +229,9 @@ class DICOMwebTransferService:
 
             # 10. Subir a JoyCare
             logger.info(f"⬆️ Subiendo a JoyCare (neonato={neonato_id})...")
-            joycare_result = await self.joycare_repo.upload_ecografia(
+            joycare_result = await self.joeycare_repo.upload_ecografia(
                 neonato_id=neonato_id,
-                file_bytes=file_bytes,
+                file_content=file_bytes,
                 filename=filename,
                 uploader_medico_id=uploader_medico_id,
                 sede_id=sede_id,

@@ -11,7 +11,7 @@ from src.services.auth_service import require_jwt
 from src.models.schemas import UploadDicomResponse, UploadMultipleDicomResponse
 
 logger = logging.getLogger("atim")
-router = APIRouter(prefix="/upload", tags=["Upload - JoeyCare a Orthanc"])
+router = APIRouter(prefix="/upload")
 
 
 def get_upload_service(settings: Settings = Depends(get_settings)) -> UploadService:
