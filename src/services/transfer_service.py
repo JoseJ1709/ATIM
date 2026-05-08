@@ -125,4 +125,4 @@ class TransferService:
 
     async def check_joeycare_connection(self) -> dict:
         """Verificar conexión con JoeyCare."""
-        return await self.joeycare_repo.check_status()
+        return await self.joeycare_repo.check_connection()
