@@ -15,6 +15,7 @@ from typing import List, Optional
 
 from src.config.settings import Settings, get_settings
 from src.services.dicomweb_service import DICOMwebService
+from src.services.auth_service import require_jwt
 from src.models.schemas import (
     StudySummary,
     StudyDetail,
@@ -48,7 +49,10 @@ def get_dicomweb_service(settings: Settings = Depends(get_settings)) -> DICOMweb
     ),
     responses={502: {"model": ErrorResponse}}
 )
-async def list_dicomweb_studies(service: DICOMwebService = Depends(get_dicomweb_service)):
+async def list_dicomweb_studies(
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
     """
     Listar todos los estudios via DICOMweb (QIDO-RS).
     
@@ -70,10 +74,9 @@ async def search_dicomweb_ecographs(
     patient_name: Optional[str] = None,
     study_date_from: Optional[str] = None,
     study_date_to: Optional[str] = None,
+    payload: dict = Depends(require_jwt),
     service: DICOMwebService = Depends(get_dicomweb_service)
 ):
-
-
     """
     Buscar ecografías (US) con filtros via DICOMweb.
     
@@ -100,7 +103,11 @@ async def search_dicomweb_ecographs(
     summary="Detalle de un estudio (DICOMweb)",
     responses={404: {"model": ErrorResponse}, 502: {"model": ErrorResponse}}
 )
-async def get_dicomweb_study(study_uid: str, service: DICOMwebService = Depends(get_dicomweb_service)):
+async def get_dicomweb_study(
+    study_uid: str,
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
     """
     Obtener detalle de un estudio via DICOMweb (QIDO-RS).
     
@@ -131,8 +138,12 @@ async def get_dicomweb_study(study_uid: str, service: DICOMwebService = Depends(
     summary="Listar instancias de una serie (DICOMweb)",
     responses={502: {"model": ErrorResponse}}
 )
-async def list_dicomweb_series_instances(study_uid: str, series_uid: str, service: DICOMwebService = Depends(get_dicomweb_service)):
-
+async def list_dicomweb_series_instances(
+    study_uid: str,
+    series_uid: str,
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
     """
     Listar instancias de una serie via DICOMweb (QIDO-RS).
     
@@ -162,6 +173,7 @@ async def download_dicomweb_instance_file(
     study_uid: str,
     series_uid: str,
     instance_uid: str,
+    payload: dict = Depends(require_jwt),
     service: DICOMwebService = Depends(get_dicomweb_service),
 ):
     """
@@ -177,13 +189,64 @@ async def download_dicomweb_instance_file(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error al descargar: {str(e)}")
 
+
+@router.get(
+    "/dicomweb/studies/{study_uid}/download",
+    summary="Descargar estudio completo como ZIP (DICOMweb)",
+    description="Descarga todas las series e instancias de un estudio via DICOMweb. Requiere JWT.",
+    responses={502: {"model": ErrorResponse}}
+)
+async def download_dicomweb_study_zip(
+    study_uid: str,
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
+    try:
+        zip_bytes = await service.download_study_as_zip(study_uid)
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=study_{study_uid}.zip"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error al descargar estudio: {str(e)}")
+
+
+@router.get(
+    "/dicomweb/studies/{study_uid}/series/{series_uid}/download",
+    summary="Descargar serie completa como ZIP (DICOMweb)",
+    description="Descarga todas las instancias de una serie via DICOMweb. Requiere JWT.",
+    responses={502: {"model": ErrorResponse}}
+)
+async def download_dicomweb_series_zip(
+    study_uid: str,
+    series_uid: str,
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
+    try:
+        zip_bytes = await service.download_series_as_zip(study_uid, series_uid)
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=series_{series_uid}.zip"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error al descargar serie: {str(e)}")
+
+
 @router.get(
     "/dicomweb/studies/{study_uid}/series/{series_uid}/instances/{instance_uid}/tags",
     summary="Tags DICOM de una instancia (DICOMweb)",
     responses={502: {"model": ErrorResponse}}
 )
-async def get_dicomweb_instance_tags(study_uid: str, series_uid: str, instance_uid: str, service: DICOMwebService = Depends(get_dicomweb_service)):
-
+async def get_dicomweb_instance_tags(
+    study_uid: str,
+    series_uid: str,
+    instance_uid: str,
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
     """
     Obtener tags DICOM de una instancia via DICOMweb.
     
@@ -207,8 +270,12 @@ async def get_dicomweb_instance_tags(study_uid: str, series_uid: str, instance_u
     "/dicomweb/studies/{study_uid}/series/{series_uid}/is-ultrasound",
     summary="Verificar si es ultrasound",
 )
-async def check_dicomweb_ultrasound(study_uid: str, series_uid: str, service: DICOMwebService = Depends(get_dicomweb_service)):
-
+async def check_dicomweb_ultrasound(
+    study_uid: str,
+    series_uid: str,
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
     """
     Verificar si una serie es ultrasound (US).
     
@@ -232,8 +299,12 @@ async def check_dicomweb_ultrasound(study_uid: str, series_uid: str, service: DI
     "/dicomweb/studies/{study_uid}/series/{series_uid}/is-etf",
     summary="Verificar si es ETF (Ecografía Transfontanelar)",
 )
-async def check_dicomweb_etf(study_uid: str, series_uid: str, service: DICOMwebService = Depends(get_dicomweb_service)):
-
+async def check_dicomweb_etf(
+    study_uid: str,
+    series_uid: str,
+    payload: dict = Depends(require_jwt),
+    service: DICOMwebService = Depends(get_dicomweb_service)
+):
     """
     Verificar si una serie es potencialmente ETF.
     

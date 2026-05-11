@@ -165,6 +165,48 @@ async def download_instance_file_encrypted(
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Error al descargar/cifrar: {str(e)}")
 
+@router.get(
+    "/studies/{study_id}/download",
+    summary="Descargar estudio completo como ZIP",
+    description="Descarga todas las series e instancias de un estudio en un archivo ZIP. Requiere JWT.",
+    responses={502: {"model": ErrorResponse}}
+)
+async def download_study_zip(
+    study_id: str,
+    payload: dict = Depends(require_jwt),
+    service: StudiesService = Depends(get_studies_service)
+):
+    try:
+        zip_bytes = await service.download_study_as_zip(study_id)
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=study_{study_id}.zip"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error al descargar estudio: {str(e)}")
+
+
+@router.get(
+    "/series/{series_id}/download",
+    summary="Descargar serie completa como ZIP",
+    description="Descarga todas las instancias de una serie en un archivo ZIP. Requiere JWT.",
+    responses={502: {"model": ErrorResponse}}
+)
+async def download_series_zip(
+    series_id: str,
+    payload: dict = Depends(require_jwt),
+    service: StudiesService = Depends(get_studies_service)
+):
+    try:
+        zip_bytes = await service.download_series_as_zip(series_id)
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename=series_{series_id}.zip"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error al descargar serie: {str(e)}")
 
 @router.get(
     "/instances/{instance_id}/preview",

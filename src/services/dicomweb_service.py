@@ -8,6 +8,9 @@ en lugar de IDs propietarios.
 """
 
 import logging
+import zipfile
+import io
+import json
 from typing import List, Optional
 
 from src.config.settings import Settings
@@ -253,7 +256,199 @@ class DICOMwebService:
         except Exception as e:
             logger.error(f"❌ Error descargando instancia {instance_uid}: {str(e)}")
             raise
+    # ============================
+    # DESCARGAS ZIP (DICOMweb)
+    # ============================
 
+    async def download_study_as_zip(self, study_uid: str) -> bytes:
+        """
+        Descargar un estudio completo via DICOMweb como ZIP.
+        Usa estructura plana para evitar paths muy largos en Windows.
+        
+        Estructura del ZIP:
+        - metadata.json (info del estudio)
+        - 001.dcm, 002.dcm, 003.dcm... (archivos DICOM)
+        
+        Args:
+            study_uid: StudyInstanceUID
+        
+        Returns:
+            Bytes del archivo ZIP
+        """
+        
+        
+        logger.info(f"📦 Preparando descarga de estudio via DICOMweb: {study_uid}")
+        
+        try:
+            # Obtener detalle del estudio
+            study_detail = await self.get_study_detail(study_uid)
+            
+            # Metadatos del estudio
+            study_metadata = {
+                "study_uid": study_uid,
+                "patient_name": study_detail.patient_name,
+                "patient_id": study_detail.patient_id,
+                "study_date": study_detail.study_date,
+                "study_description": study_detail.study_description,
+                "series_count": study_detail.series_count,
+                "files": []
+            }
+            
+            # Crear ZIP en memoria
+            zip_buffer = io.BytesIO()
+            instance_counter = 1
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                # Iterar sobre cada serie del estudio
+                for series_info in study_detail.series:
+                    series_uid = series_info.get("series_instance_uid")
+                    series_desc = series_info.get("series_description", "unknown")
+                    modality = series_info.get("modality", "UNKNOWN")
+                    series_number = series_info.get("series_number", "")
+                    
+                    # Obtener todas las instancias de la serie
+                    instances = await self.get_series_instances(study_uid, series_uid)
+                    
+                    for instance in instances:
+                        try:
+                            instance_uid = instance.sop_instance_uid or instance.orthanc_id
+                            
+                            # Descargar instancia
+                            dicom_bytes = await self.get_instance_file(study_uid, series_uid, instance_uid)
+                            
+                            # Nombre corto: 001.dcm, 002.dcm, etc.
+                            filename = f"{instance_counter:03d}.dcm"
+                            
+                            # Añadir al ZIP
+                            zf.writestr(filename, dicom_bytes)
+                            
+                            # Registrar en metadatos
+                            study_metadata["files"].append({
+                                "file": filename,
+                                "instance_uid": instance_uid,
+                                "series_uid": series_uid,
+                                "modality": modality,
+                                "series_description": series_desc,
+                                "series_number": series_number,
+                                "instance_number": instance.instance_number,
+                                "size_bytes": len(dicom_bytes)
+                            })
+                            
+                            logger.info(f"✅ Añadido a ZIP: {filename} ({len(dicom_bytes)} bytes)")
+                            instance_counter += 1
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Error descargando instancia {instance_uid}: {str(e)}")
+                            continue
+                
+                # Agregar metadata.json
+                metadata_json = json.dumps(study_metadata, indent=2)
+                zf.writestr("metadata.json", metadata_json)
+                logger.info(f"✅ Metadatos guardados en metadata.json")
+            
+            zip_data = zip_buffer.getvalue()
+            logger.info(f"📦 ZIP DICOMweb creado: {len(zip_data)} bytes, {instance_counter-1} archivos")
+            return zip_data
+            
+        except Exception as e:
+            logger.error(f"❌ Error en download_study_as_zip (DICOMweb): {str(e)}")
+            raise
+
+    async def download_series_as_zip(self, study_uid: str, series_uid: str) -> bytes:
+        """
+        Descargar una serie completa via DICOMweb como ZIP.
+        Usa estructura plana para evitar paths muy largos.
+        
+        Estructura del ZIP:
+        - metadata.json (info de la serie)
+        - 001.dcm, 002.dcm, 003.dcm... (archivos DICOM)
+        
+        Args:
+            study_uid: StudyInstanceUID
+            series_uid: SeriesInstanceUID
+        
+        Returns:
+            Bytes del archivo ZIP
+        """
+        import zipfile
+        import io
+        import json
+        
+        logger.info(f"📦 Preparando descarga de serie via DICOMweb: {series_uid}")
+        
+        try:
+            # Obtener instancias de la serie
+            instances = await self.get_series_instances(study_uid, series_uid)
+            
+            # Obtener información de la serie
+            study_detail = await self.get_study_detail(study_uid)
+            series_info = None
+            for s in study_detail.series:
+                if s.get("series_instance_uid") == series_uid:
+                    series_info = s
+                    break
+            
+            modality = series_info.get("modality", "UNKNOWN") if series_info else "UNKNOWN"
+            series_desc = series_info.get("series_description", "unknown") if series_info else "unknown"
+            series_number = series_info.get("series_number", "") if series_info else ""
+            
+            # Metadatos de la serie
+            series_metadata = {
+                "series_uid": series_uid,
+                "study_uid": study_uid,
+                "modality": modality,
+                "series_description": series_desc,
+                "series_number": series_number,
+                "instances_count": len(instances),
+                "files": []
+            }
+            
+            # Crear ZIP en memoria
+            zip_buffer = io.BytesIO()
+            instance_counter = 1
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for instance in instances:
+                    try:
+                        instance_uid = instance.sop_instance_uid or instance.orthanc_id
+                        
+                        # Descargar instancia
+                        dicom_bytes = await self.get_instance_file(study_uid, series_uid, instance_uid)
+                        
+                        # Nombre corto: 001.dcm, 002.dcm, etc.
+                        filename = f"{instance_counter:03d}.dcm"
+                        
+                        # Añadir al ZIP
+                        zf.writestr(filename, dicom_bytes)
+                        
+                        # Registrar en metadatos
+                        series_metadata["files"].append({
+                            "file": filename,
+                            "instance_uid": instance_uid,
+                            "instance_number": instance.instance_number,
+                            "size_bytes": len(dicom_bytes)
+                        })
+                        
+                        logger.info(f"✅ Añadido a ZIP: {filename} ({len(dicom_bytes)} bytes)")
+                        instance_counter += 1
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Error descargando instancia {instance_uid}: {str(e)}")
+                        continue
+                
+                # Agregar metadata.json
+                metadata_json = json.dumps(series_metadata, indent=2)
+                zf.writestr("metadata.json", metadata_json)
+                logger.info(f"✅ Metadatos guardados en metadata.json")
+            
+            zip_data = zip_buffer.getvalue()
+            logger.info(f"📦 ZIP DICOMweb serie creado: {len(zip_data)} bytes, {instance_counter-1} archivos")
+            return zip_data
+            
+        except Exception as e:
+            logger.error(f"❌ Error en download_series_as_zip (DICOMweb): {str(e)}")
+            raise
+            
     async def get_instance_frames(
         self,
         study_uid: str,

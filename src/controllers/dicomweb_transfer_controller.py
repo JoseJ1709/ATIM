@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from src.config.settings import Settings, get_settings
 from src.services.dicomweb_transfer_service import DICOMwebTransferService
+from src.services.auth_service import require_jwt
 from src.models.schemas import ErrorResponse
 
 logger = logging.getLogger("atim")
@@ -113,11 +114,13 @@ class TransferDICOMwebStudyRequest(BaseModel):
     summary="Estado de JoyCare (DICOMweb)",
     description=(
         "Verifica la conexión con el backend de JoyCare.\n\n"
-        "Útil para validar que JoyCare está disponible antes de transferir imágenes."
+        "Útil para validar que JoyCare está disponible antes de transferir imágenes. "
+        "Requiere JWT."
     ),
     responses={502: {"model": ErrorResponse}}
 )
 async def check_joycare_status(
+    payload: dict = Depends(require_jwt),
     service: DICOMwebTransferService = Depends(get_dicomweb_transfer_service)
 ):
     """
@@ -143,11 +146,13 @@ async def check_joycare_status(
     summary="Listar neonatos de JoyCare (DICOMweb)",
     description=(
         "Obtiene la lista de todos los neonatos disponibles en JoyCare.\n\n"
-        "Use los neonato_id de esta lista para especificar el destino de la transferencia."
+        "Use los neonato_id de esta lista para especificar el destino de la transferencia. "
+        "Requiere JWT."
     ),
     responses={502: {"model": ErrorResponse}}
 )
 async def list_joycare_neonatos(
+    payload: dict = Depends(require_jwt),
     service: DICOMwebTransferService = Depends(get_dicomweb_transfer_service)
 ):
     """
@@ -196,7 +201,8 @@ async def list_joycare_neonatos(
         "- series_uid: SeriesInstanceUID (ej: 1.3.46.670589.11...)\n"
         "- instance_uid: SOPInstanceUID (ej: 1.2.840.10008...)\n"
         "- neonato_id: ID del neonato destino\n"
-        "- uploader_medico_id: ID del médico que realiza la transferencia"
+        "- uploader_medico_id: ID del médico que realiza la transferencia\n\n"
+        "Requiere JWT."
     ),
     responses={
         400: {"model": ErrorResponse},
@@ -205,6 +211,7 @@ async def list_joycare_neonatos(
 )
 async def transfer_dicomweb_instance(
     request: TransferDICOMwebInstanceRequest,
+    payload: dict = Depends(require_jwt),
     service: DICOMwebTransferService = Depends(get_dicomweb_transfer_service)
 ):
     """
@@ -281,7 +288,8 @@ async def transfer_dicomweb_instance(
         "- series_uid: SeriesInstanceUID\n"
         "- neonato_id: ID del neonato destino\n"
         "- uploader_medico_id: ID del médico\n"
-        "- only_etf: Si es True, solo transfiere si se confirma ETF (default: False)"
+        "- only_etf: Si es True, solo transfiere si se confirma ETF (default: False)\n\n"
+        "Requiere JWT."
     ),
     responses={
         400: {"model": ErrorResponse},
@@ -290,6 +298,7 @@ async def transfer_dicomweb_instance(
 )
 async def transfer_dicomweb_series(
     request: TransferDICOMwebSeriesRequest,
+    payload: dict = Depends(require_jwt),
     service: DICOMwebTransferService = Depends(get_dicomweb_transfer_service)
 ):
     """
@@ -359,7 +368,8 @@ async def transfer_dicomweb_series(
         "- neonato_id: ID del neonato destino\n"
         "- uploader_medico_id: ID del médico\n"
         "- only_etf: Si es True, solo transfiere series que sean ETF (default: False)\n"
-        "- only_ultrasound: Si es True, solo transfiere series US (default: True)"
+        "- only_ultrasound: Si es True, solo transfiere series US (default: True)\n\n"
+        "Requiere JWT."
     ),
     responses={
         400: {"model": ErrorResponse},
@@ -368,6 +378,7 @@ async def transfer_dicomweb_series(
 )
 async def transfer_dicomweb_study(
     request: TransferDICOMwebStudyRequest,
+    payload: dict = Depends(require_jwt),
     service: DICOMwebTransferService = Depends(get_dicomweb_transfer_service)
 ):
     """
@@ -427,9 +438,11 @@ async def transfer_dicomweb_study(
 @router.get(
     "/dicomweb/transfer/info",
     summary="Información de transferencia DICOMweb",
-    description="Retorna información sobre los endpoints de transferencia disponibles."
+    description="Retorna información sobre los endpoints de transferencia disponibles. Requiere JWT."
 )
-async def get_dicomweb_transfer_info():
+async def get_dicomweb_transfer_info(
+    payload: dict = Depends(require_jwt)
+):
     """
     Obtener información sobre los endpoints de transferencia DICOMweb.
     
